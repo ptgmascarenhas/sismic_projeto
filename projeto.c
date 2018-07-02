@@ -49,28 +49,29 @@ void config_pinos(void); // configura os pinos
 void config_I2C(void);   // configura as comunicacao
 void delay(long limite); // atrasa
 
-int humidityInt(void);
-int temperatureInt(void);
-int checksumInt(void);
-void dht22(void);
-void dht22_data(void);
-void dht22_result(void);
+int humidityInt(void);      // tranforma um vetor em inteiro
+int temperatureInt(void);   // tranforma um vetor em inteiro
+int checksumInt(void);      // faz a soma de verificacao
+void dht22(void);           // le do sensor (ONE WIRE)
+void dht22_data(void);      // ajusta os dados recebidos
+void dht22_result(void);    // printa o resultado 
 
-void aviso(void);
+void aviso(void);   // avisa anormalidades
 
-void hc5_config_serial(void);
-void hc5_config_pinos(void);
-void hc5_write_temp(void);
+void hc5_config_serial(void);   // configura serial para o bt
+void hc5_config_pinos(void);    // configura pinos para o bt
+void hc5_write_temp(void);      // envia por bt
 
 /////////////////////////////////////////////
 
 int porta = 0;       //valor que sera enviado
 int position = 0x00; //posicao do cursor
 
-int tBaixo, tAlto, dado[40], i, hh[8], hl[8], th[8], tl[8], cs[8], t, h, checksum, sum;
-int aux1, aux2, aux3;
-int tk, tc, td, tu; //variaveis para a funcao de numero no lcd
-int hk, hc, hd, hu; //variaveis para a funcao de numero no lcd
+int tBaixo, tAlto,      //variaveis auxiliares para medir degraus
+    dado[40], hh[8], hl[8], th[8], tl[8], cs[8],    //variaveis de dados
+    t, h, checksum, sum, //tempo, umidade, soma de verificacao e tempo+umidade 
+    tk, tc, td, tu,      //variaveis para a funcao de numero no lcd
+    hk, hc, hd, hu;      //variaveis para a funcao de numero no lcd
 
 
 int main(void) {
@@ -78,10 +79,11 @@ int main(void) {
 
     __delay_cycles(30000);
 
+    //Faco as configuracoes necessarias
+
     config_pinos();
     config_I2C();
     lcd_inic();
-
     hc5_config_serial();
     hc5_config_pinos();
     UCA0CTL1 &= ~UCSWRST;
@@ -89,39 +91,43 @@ int main(void) {
     //lcd_write_byte(0xF, 0); //ativa o mostrador, com cursor
     lcd_write_byte(0xC, 0); //ativa o mostrador, sem cursor
 
+    //coloca o p2.0 como saida em 1
+    P2DIR |= BIT0;  //2.0 como saida
+    P2OUT |= BIT0;  //2.0 em 1
 
-        //coloca o p2.0 como saida em 1
-        P2DIR |= BIT0;  //2.0 como saida
-        P2OUT |= BIT0;  //2.0 em 1
-        __delay_cycles(1000);
+    __delay_cycles(1000);
 
-        dht22();
+    //le do dht22
+    dht22();    
 
-        __delay_cycles(1000);
+    __delay_cycles(1000);
 
-        dht22_data();
+    //ajusta os dados
+    dht22_data();   
 
-        h = humidityInt();
-        t = temperatureInt();
+    //faz a conversao
+    h = humidityInt();
+    t = temperatureInt();
 
-        dht22_result();
+    //printa o resutado
+    dht22_result();
 
-        if(t < 100 || t > 400 || h < 300 || h > 800)
-            aviso();
+    if(t < 100 || t > 400 || h < 300 || h > 800)
+        aviso();
 
 
     while(1){
         while(!(UCA0IFG & UCRXIFG)); // Espera receber comando do botão configurado no App
-        if(UCA0RXBUF == 0x99){ // Se o botão tiver configurado para receber o código HEX 0x99, entra nesse if
-            hc5_write_temp(); // Faz o print da temperatura no console do app
-            __delay_cycles(200); // Delay para estabilizar
+        if(UCA0RXBUF == 0x99){       // Se o botão tiver configurado para receber o código HEX 0x99, entra nesse if
+            hc5_write_temp();        // Faz o print da temperatura no console do app
+            __delay_cycles(200);     // Delay para estabilizar
         }
     }
     return 0;
 }
 
-////////////////////////////////////////////////////////////////////////////////////
 
+////////////////////////////////////////////////////////////////////////////////////
 
 /**
  * Função que faz a configuração dos pinos que conectam o hc05 e o msp430 fisicamente
@@ -154,71 +160,71 @@ void hc5_config_serial(void){
  * */
 void hc5_write_temp(void){
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = 0x0A; // \n : new lina, pula uma linha
+    UCA0TXBUF = 0x0A;               // \n : new lina, pula uma linha
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = 0x54; // T
+    UCA0TXBUF = 0x54;               // mando pro bt T
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = 0x3A; // :
+    UCA0TXBUF = 0x3A;               // mando pro bt :
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = tc+0x30; // 2
+    UCA0TXBUF = tc+0x30;            // mando pro bt tu
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = td+0x30; // 2
+    UCA0TXBUF = td+0x30;            // mando pro bt td
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = 0x2E; // .
+    UCA0TXBUF = 0x2E;               // mando pro bt .
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = tu+0x30; // 5
+    UCA0TXBUF = tu+0x30;            // mando pro bt tu
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = 'º'; // º
+    UCA0TXBUF = 'º';                // mando pro bt º
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = 0x43; //C
+    UCA0TXBUF = 0x43;               // mando pro bt C
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = 0x0A; // \n
+    UCA0TXBUF = 0x0A;               // \n
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = 0x55; // U
+    UCA0TXBUF = 0x55;               // mando pro bt U
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = 0x3A; // :
+    UCA0TXBUF = 0x3A; // mando pro bt :
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = hc+0x30; // 6
+    UCA0TXBUF = hc+0x30; // mando pro bt hc
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = hd+0x30; // 5
+    UCA0TXBUF = hd+0x30; // mando pro bt hd
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = 0x2E; // .
+    UCA0TXBUF = 0x2E; // mando pro bt .
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = hu+0x30; // 9
+    UCA0TXBUF = hu+0x30; // mando pro bt hu
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
-    UCA0TXBUF = 0x25; // %
+    UCA0TXBUF = 0x25; // mando pro bt %
     __delay_cycles(200);
 
     while(!(UCA0IFG & UCTXIFG));
@@ -226,24 +232,14 @@ void hc5_write_temp(void){
     __delay_cycles(200);
 }
 
-int p1in, p1out, p1ren, p1sel, p1dir;
+////////////////////////////////////////////////////////////////////////////////////
 
-void analisap1(void){
-    p1in = P1IN;
-    p1out = P1OUT;
-    p1ren = P1REN;
-    p1sel = P1SEL;
-    p1dir = P1DIR;
-}
-
-void dht22(void){
+void dht22(void){   //faz o protocolo one wire
     P1IN = 0;
     P1OUT = 0;
     P1REN = 0;
     P1SEL = 0;
     P1DIR = 0;
-
-    analisap1();
 
     __delay_cycles(3000000);
 
@@ -253,8 +249,6 @@ void dht22(void){
     P1DIR |= BIT2;  //1.2 como saida
     P1OUT |= BIT2;  //1.2 em 1
     P1SEL &= ~BIT2; //Tira a funcao de captura
-
-    analisap1();
 
     __delay_cycles(3000000);
 
@@ -271,10 +265,8 @@ void dht22(void){
     P1REN |= BIT2;  //1.2 com resist
     P1OUT |= BIT2;  //1.2 com pull up
 
-
     //espera a resposta do dht
     while( (P1IN & BIT2) == BIT2); //fica preso em 1 (Tgo)
-
 
     TA0CCTL1 = CM_1|CCIS_0|SCS|CAP; //captura flanco de subida, sincrona
     TA0CTL |= TACLR;
@@ -312,21 +304,14 @@ void dht22(void){
     TA0CCTL1 &= ~CCIFG;
 
 
-    analisap1();
-
-
     //faz pino como saida e envia 1 na saida
     P1DIR |= BIT2;  //1.2 como saida
     P1OUT |= BIT2;  //1.2 em 1
     P1SEL &= ~BIT2; //Tira a funcao de captura
     P1REN &= ~BIT2;  //1.2 sem resist
-
-    analisap1();
-
 }
 
-
-void dht22_data(void){
+void dht22_data(void){  //separa o dado recebido 
     for(i = 0; i < 8; i++){
         hh[i] = dado[i];
         hl[i] = dado[i+8];
@@ -336,7 +321,7 @@ void dht22_data(void){
     }
 }
 
-void dht22_result(void){
+void dht22_result(void){    //imprime o resultado no lcd
     if(checksumInt()){
         lcd_str("T: ");
         lcd_num(t, 't');
@@ -354,7 +339,7 @@ void dht22_result(void){
     }
 }
 
-int humidityInt(void){
+int humidityInt(void){ //converte a umidade para uma variavel tipo int
     int humidity;
 
     humidity = 1*hl[7]    + 2*hl[6]    + 4*hl[5]     + 8*hl[4]
@@ -366,7 +351,7 @@ int humidityInt(void){
     return humidity;
 }
 
-int temperatureInt(void){
+int temperatureInt(void){   //converte a temperatura para uma variavel tipo int
     int temperature;
 
     temperature =  1*tl[7]    + 2*tl[6]    + 4*tl[5]     + 8*tl[4]
@@ -380,7 +365,8 @@ int temperatureInt(void){
     return temperature;
 }
 
-int checksumInt(void){
+int checksumInt(void){  //faz a soma de verificacao 
+
     checksum =  1*cs[7] + 2*cs[6]  + 4*cs[5]  + 8*cs[4]
              + 16*cs[3] + 32*cs[2] + 64*cs[1] + 128*cs[0];
 
@@ -388,17 +374,16 @@ int checksumInt(void){
 
     i = (h+t);
 
-    if( (checksum - 2) == sum ||(checksum - 1) == sum)
+    if( (checksum - 2) == sum ||(checksum - 1) == sum) 
         return 1;
     else
         return 0;
 }
 
-void aviso(void){
+void aviso(void){   //funcao para ligar o led caso ocorra alguma anormalidade
     P6DIR |= BIT5;
     P6OUT |= BIT5;
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////////
 
@@ -482,7 +467,7 @@ void lcd_char(char dado){   //enviar a posicao em hex 0x00-0f, 0x40-4f
 }
 
 void lcd_num(int num, char c){        //converte de 0 a 1000
-    int flag = 0;
+    int flag = 0;                     // o char serve para ver se e temperatura ou umidade  
 
     if(c == 't'){
         if(num > 999){
@@ -535,7 +520,6 @@ void lcd_num(int num, char c){        //converte de 0 a 1000
     }
 
 }
-
 
 void lcd_str(char *message){
     while(*message != '\0'){
